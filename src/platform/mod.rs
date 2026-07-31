@@ -456,6 +456,9 @@ pub(crate) fn quote_windows_command_line_arg(value: &str) -> String {
 
 pub(crate) fn is_pane_shell_process_name(name: &str) -> bool {
     let normalized = normalized_process_name(name);
+    let versioned_bash = normalized.strip_prefix("bash").is_some_and(|suffix| {
+        !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
+    });
     matches!(
         normalized.as_str(),
         "sh" | "bash"
@@ -472,7 +475,7 @@ pub(crate) fn is_pane_shell_process_name(name: &str) -> bool {
             | "pwsh"
             | "powershell"
             | "cmd"
-    )
+    ) || versioned_bash
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -578,10 +581,26 @@ mod tests {
 
     #[test]
     fn pane_shell_process_names_reject_exec_replacement_programs() {
-        for shell in ["bash", "-zsh", "/bin/fish", "pwsh", "powershell.exe"] {
+        for shell in [
+            "bash",
+            "bash5",
+            "/opt/homebrew/bin/bash52",
+            "-zsh",
+            "/bin/fish",
+            "pwsh",
+            "powershell.exe",
+        ] {
             assert!(is_pane_shell_process_name(shell), "{shell}");
         }
-        for program in ["vim", "nvim", "cargo", "test-runner", "opencode"] {
+        for program in [
+            "vim",
+            "nvim",
+            "cargo",
+            "test-runner",
+            "opencode",
+            "bash-func",
+            "bashful",
+        ] {
             assert!(!is_pane_shell_process_name(program), "{program}");
         }
     }
