@@ -67,6 +67,14 @@ const TERMINAL_COMPRESSION_IDLE: std::time::Duration = std::time::Duration::from
 const TERMINAL_COMPRESSION_STEP: std::time::Duration = std::time::Duration::from_millis(1);
 pub(crate) const PANE_TERM: &str = "xterm-256color";
 const PANE_COLORTERM: &str = "truecolor";
+/// Outer-terminal session IDs identify a terminal process, not a Herdr pane.
+///
+/// They must not be inherited by managed children: iTerm can restore a client
+/// with an old value, and downstream hooks would then route presentation to
+/// that stale terminal. Any outer-client binding must use an explicit,
+/// non-inherited protocol value instead.
+const OUTER_TERMINAL_IDENTITY_ENV: &[&str] = &["ITERM_SESSION_ID", "TERM_SESSION_ID"];
+static PANE_INSTANCE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 fn terminal_compression_permits() -> Arc<tokio::sync::Semaphore> {
     static PERMITS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
@@ -131,6 +139,7 @@ enum PaneLaunchIdentity {
         workspace_id: String,
         tab_id: String,
         pane_id: String,
+        pane_instance: u64,
     },
     OmitPane,
 }
@@ -149,10 +158,12 @@ impl PaneLaunchEnv {
         tab_id: String,
         pane_id: String,
     ) -> Self {
+        let pane_instance = PANE_INSTANCE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         self.identity = PaneLaunchIdentity::Managed {
             workspace_id,
             tab_id,
             pane_id,
+            pane_instance,
         };
         self
     }
@@ -181,6 +192,11 @@ fn apply_pane_launch_env(cmd: &mut CommandBuilder, launch_env: &PaneLaunchEnv) {
     for (key, value) in &launch_env.extra {
         cmd.env(key, value);
     }
+    // CommandBuilder inherits the server environment by default. Do this
+    // after `extra` so a caller cannot reintroduce an outer terminal identity.
+    for key in OUTER_TERMINAL_IDENTITY_ENV {
+        cmd.env_remove(key);
+    }
     cmd.env(crate::HERDR_ENV_VAR, crate::HERDR_ENV_VALUE);
     crate::integration::apply_pane_base_env(cmd);
     crate::platform::apply_pane_runtime_marker(cmd);
@@ -190,13 +206,19 @@ fn apply_pane_launch_env(cmd: &mut CommandBuilder, launch_env: &PaneLaunchEnv) {
             workspace_id,
             tab_id,
             pane_id,
+            pane_instance,
         } => {
             cmd.env(crate::integration::HERDR_WORKSPACE_ID_ENV_VAR, workspace_id);
             cmd.env(crate::integration::HERDR_TAB_ID_ENV_VAR, tab_id);
             cmd.env(crate::integration::HERDR_PANE_ID_ENV_VAR, pane_id);
+            cmd.env(
+                crate::integration::HERDR_PANE_INSTANCE_ENV_VAR,
+                pane_instance.to_string(),
+            );
         }
         PaneLaunchIdentity::OmitPane => {
             cmd.env_remove(crate::integration::HERDR_PANE_ID_ENV_VAR);
+            cmd.env_remove(crate::integration::HERDR_PANE_INSTANCE_ENV_VAR);
         }
     }
 }
