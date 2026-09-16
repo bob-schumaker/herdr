@@ -10,12 +10,12 @@ use std::sync::{Mutex, MutexGuard};
 #[cfg(not(windows))]
 use std::time::{Duration, Instant};
 
+#[cfg(not(windows))]
+use crossterm::event::PushKeyboardEnhancementFlags;
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
     EnableFocusChange, EnableMouseCapture,
 };
-#[cfg(not(windows))]
-use crossterm::event::{PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags};
 use crossterm::execute;
 use crossterm::terminal::{DisableLineWrap, EnableLineWrap};
 
@@ -689,7 +689,15 @@ fn push_keyboard_enhancement_flags() -> io::Result<()> {
 
 #[cfg(not(windows))]
 fn pop_keyboard_enhancement_flags() -> io::Result<()> {
-    execute!(io::stdout(), PopKeyboardEnhancementFlags)
+    restore_keyboard_enhancement_flags(&mut io::stdout())
+}
+
+#[cfg(not(windows))]
+fn restore_keyboard_enhancement_flags(writer: &mut impl io::Write) -> io::Result<()> {
+    // Omit the count to request the protocol's default one-level pop. iTerm's
+    // keyboard-mode implementation does not restore its stack for `CSI < 1 u`.
+    writer.write_all(b"\x1b[<u")?;
+    writer.flush()
 }
 
 #[cfg(windows)]
@@ -984,5 +992,15 @@ mod tests {
             output,
             b"\x1b[?1006l\x1b[?1016l\x1b[?1015l\x1b[?1005l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?9l"
         );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn keyboard_enhancement_restore_pops_one_saved_mode() {
+        let mut output = Vec::new();
+
+        super::restore_keyboard_enhancement_flags(&mut output).unwrap();
+
+        assert_eq!(output, b"\x1b[<u");
     }
 }
