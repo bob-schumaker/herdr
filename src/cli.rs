@@ -853,6 +853,10 @@ fn map_server_not_running_or_io(
 fn api_client_error_to_io(err: ApiClientError) -> std::io::Error {
     match err {
         ApiClientError::Io(err) => err,
+        // The peer accepted the request but closed before sending a response.
+        // Preserve that transport meaning so callers with offline recovery can
+        // distinguish it from a protocol or application error.
+        ApiClientError::EmptyResponse => std::io::Error::from(std::io::ErrorKind::UnexpectedEof),
         err => std::io::Error::other(err),
     }
 }
@@ -1157,6 +1161,15 @@ mod tests {
             &client,
         );
         assert!(!super::server_not_running::was_reported(&mapped));
+    }
+
+    #[test]
+    fn empty_api_response_maps_to_unexpected_eof() {
+        use crate::api::client::ApiClientError;
+
+        let mapped = super::api_client_error_to_io(ApiClientError::EmptyResponse);
+
+        assert_eq!(mapped.kind(), std::io::ErrorKind::UnexpectedEof);
     }
 
     #[test]

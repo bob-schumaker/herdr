@@ -78,6 +78,9 @@ fn plugin_link(args: &[String]) -> std::io::Result<i32> {
         id: "cli:plugin".into(),
         method: Method::PluginLink(params.clone()),
     }) {
+        Ok(response) if is_server_unavailable_response(&response) => {
+            offline_plugin_link_response(&params)?
+        }
         Ok(response) => response,
         Err(err) if is_connection_error(&err) => offline_plugin_link_response(&params)?,
         Err(err) => return Err(err),
@@ -1642,7 +1645,15 @@ fn is_connection_error(err: &std::io::Error) -> bool {
                 | std::io::ErrorKind::ConnectionAborted
                 | std::io::ErrorKind::ConnectionReset
                 | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::UnexpectedEof
         )
+}
+
+fn is_server_unavailable_response(response: &serde_json::Value) -> bool {
+    response
+        .pointer("/error/code")
+        .and_then(serde_json::Value::as_str)
+        == Some("server_unavailable")
 }
 
 fn print_plugin_response(method: Method) -> std::io::Result<i32> {
@@ -1824,6 +1835,23 @@ mod tests {
         plugin.source = PluginSourceInfo::default();
 
         assert!(plugin_by_github_source([plugin], &source).is_none());
+    }
+
+    #[test]
+    fn connection_error_recognizes_closed_api_response() {
+        let error = std::io::Error::from(std::io::ErrorKind::UnexpectedEof);
+
+        assert!(is_connection_error(&error));
+    }
+
+    #[test]
+    fn server_unavailable_response_triggers_offline_recovery() {
+        assert!(is_server_unavailable_response(&serde_json::json!({
+            "error": {"code": "server_unavailable"}
+        })));
+        assert!(!is_server_unavailable_response(&serde_json::json!({
+            "error": {"code": "invalid_params"}
+        })));
     }
 
     #[test]
