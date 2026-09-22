@@ -1880,7 +1880,7 @@ platforms = ["linux", "macos"]
 [[panes]]
 id = "board"
 title = "Plugin Board"
-command = ["sh", "-c", "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \"$PWD\" \"$HERDR_PLUGIN_ID\" \"$HERDR_PLUGIN_ENTRYPOINT_ID\" \"$HERDR_WORKSPACE_ID\" \"$HERDR_PANE_ID\" \"$HERDR_BIN_PATH\" \"$HERDR_PLUGIN_CONTEXT_JSON\" \"${{HERDR_CELL_WIDTH_PX-unset}}\" \"${{HERDR_CELL_HEIGHT_PX-unset}}\" > {}"]
+command = ["sh", "-c", "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \"$PWD\" \"$HERDR_PLUGIN_ID\" \"$HERDR_PLUGIN_ENTRYPOINT_ID\" \"$HERDR_WORKSPACE_ID\" \"$HERDR_PANE_ID\" \"$HERDR_BIN_PATH\" \"$HERDR_PLUGIN_CONTEXT_JSON\" \"${{HERDR_CELL_WIDTH_PX-unset}}\" \"${{HERDR_CELL_HEIGHT_PX-unset}}\" \"$HERDR_SESSION\" > {}"]
 "#,
                 capture.display()
             ),
@@ -1910,6 +1910,7 @@ command = ["sh", "-c", "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \"$PWD\" \
                         "HERDR_PLUGIN_CONTEXT_JSON".to_string(),
                         "{\"spoofed\":true}".to_string(),
                     ),
+                    ("HERDR_SESSION".to_string(), "spoofed-session".to_string()),
                     (
                         "HERDR_BIN_PATH".to_string(),
                         "/tmp/spoofed-herdr".to_string(),
@@ -1956,6 +1957,10 @@ command = ["sh", "-c", "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \"$PWD\" \
         );
         assert_eq!(lines.next(), Some("unset"));
         assert_eq!(lines.next(), Some("unset"));
+        assert_eq!(
+            lines.next(),
+            Some(crate::session::environment_name().as_str())
+        );
 
         for (_, runtime) in app.terminal_runtimes.drain() {
             runtime.shutdown();
@@ -2739,7 +2744,7 @@ platforms = ["linux", "macos"]
 [[actions]]
 id = "run"
 title = "Run"
-command = ["sh", "-c", "printf '%s\n%s\n%s' \"$HERDR_PLUGIN_ROOT\" \"$HERDR_PLUGIN_CONFIG_DIR\" \"$HERDR_PLUGIN_STATE_DIR\""]
+command = ["sh", "-c", "printf '%s\n%s\n%s\n%s' \"$HERDR_PLUGIN_ROOT\" \"$HERDR_PLUGIN_CONFIG_DIR\" \"$HERDR_PLUGIN_STATE_DIR\" \"$HERDR_SESSION\""]
 "#,
         );
         link_manifest(&mut app, &root);
@@ -2806,6 +2811,10 @@ command = ["sh", "-c", "printf '%s\n%s\n%s' \"$HERDR_PLUGIN_ROOT\" \"$HERDR_PLUG
                     .to_string()
                     .as_str()
             )
+        );
+        assert_eq!(
+            lines.next(),
+            Some(crate::session::environment_name().as_str())
         );
 
         let _ = std::fs::remove_dir_all(root);

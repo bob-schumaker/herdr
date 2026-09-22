@@ -100,6 +100,14 @@ pub fn active_name() -> Option<String> {
         .filter(|name| validate_name(name).is_ok())
 }
 
+/// Returns the canonical session name for child runtime environments.
+///
+/// The default session is represented internally by the absence of
+/// `HERDR_SESSION`, but child processes need an explicit, stable value.
+pub fn environment_name() -> String {
+    active_name().unwrap_or_else(|| DEFAULT_SESSION_NAME.to_string())
+}
+
 pub fn local_attach_command() -> String {
     match active_name() {
         Some(name) => format!("herdr session attach {name}"),
@@ -856,6 +864,37 @@ mod tests {
         std::env::remove_var(SESSION_ENV_VAR);
         std::env::remove_var(crate::api::SOCKET_PATH_ENV_VAR);
         clear_explicit_session_for_test();
+    }
+
+    #[test]
+    fn environment_name_normalizes_default_session() {
+        let _guard = env_lock().lock().unwrap();
+        let previous = std::env::var_os(SESSION_ENV_VAR);
+
+        std::env::remove_var(SESSION_ENV_VAR);
+        assert_eq!(environment_name(), DEFAULT_SESSION_NAME);
+
+        std::env::set_var(SESSION_ENV_VAR, DEFAULT_SESSION_NAME);
+        assert_eq!(environment_name(), DEFAULT_SESSION_NAME);
+
+        match previous {
+            Some(value) => std::env::set_var(SESSION_ENV_VAR, value),
+            None => std::env::remove_var(SESSION_ENV_VAR),
+        }
+    }
+
+    #[test]
+    fn environment_name_preserves_named_session() {
+        let _guard = env_lock().lock().unwrap();
+        let previous = std::env::var_os(SESSION_ENV_VAR);
+
+        std::env::set_var(SESSION_ENV_VAR, "personal");
+        assert_eq!(environment_name(), "personal");
+
+        match previous {
+            Some(value) => std::env::set_var(SESSION_ENV_VAR, value),
+            None => std::env::remove_var(SESSION_ENV_VAR),
+        }
     }
 
     #[test]

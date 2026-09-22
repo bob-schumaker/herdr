@@ -347,6 +347,7 @@ fn plugin_pane_protected_env_key(key: &str) -> bool {
     matches!(
         key,
         crate::api::SOCKET_PATH_ENV_VAR
+            | crate::session::SESSION_ENV_VAR
             | "HERDR_ENV"
             | "HERDR_PLUGIN_ID"
             | "HERDR_PLUGIN_ROOT"

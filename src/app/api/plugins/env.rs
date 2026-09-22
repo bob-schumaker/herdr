@@ -17,6 +17,10 @@ pub(super) fn plugin_path_env(plugin: &InstalledPluginInfo) -> Vec<(String, Stri
     let state_dir = plugin_state_dir(&plugin.plugin_id);
 
     vec![
+        (
+            crate::session::SESSION_ENV_VAR.to_string(),
+            crate::session::environment_name(),
+        ),
         ("HERDR_PLUGIN_ROOT".to_string(), plugin.plugin_root.clone()),
         (
             "HERDR_PLUGIN_CONFIG_DIR".to_string(),
